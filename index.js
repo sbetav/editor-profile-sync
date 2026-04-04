@@ -1,37 +1,37 @@
 #!/usr/bin/env node
 
-import { existsSync, readFileSync } from "fs";
-import { dirname, join } from "path";
-import { fileURLToPath } from "url";
-import ora from "ora";
 import chalk from "chalk";
+import { existsSync, readFileSync } from "fs";
+import ora from "ora";
+import { dirname, join } from "path";
 import updateNotifier from "update-notifier";
+import { fileURLToPath } from "url";
 import {
-  EDITORS,
-  EXTENSION_MODES,
-  SNIPPET_MODES,
-  SYNC_ITEMS,
+    EDITORS,
+    EXTENSION_MODES,
+    SNIPPET_MODES,
+    SYNC_ITEMS,
 } from "./lib/constants.js";
 import { isEditorInstalled } from "./lib/editor-cli.js";
 import { exportExtensions, syncExtensions } from "./lib/extensions-sync.js";
 import {
-  getSettingsPath,
-  getSnippetsPath,
-  getKeybindingsPath,
-} from "./lib/profile-paths.js";
-import { readSourceSettings, syncSettings } from "./lib/settings-sync.js";
-import { syncSnippets } from "./lib/snippets-sync.js";
-import {
-  readSourceKeybindings,
-  syncKeybindings,
+    readSourceKeybindings,
+    syncKeybindings,
 } from "./lib/keybindings-sync.js";
 import {
-  promptExtensionMode,
-  promptSnippetMode,
-  promptSourceEditor,
-  promptSyncItems,
-  promptTargetEditors,
+    getKeybindingsPath,
+    getSettingsPath,
+    getSnippetsPath,
+} from "./lib/profile-paths.js";
+import {
+    promptExtensionMode,
+    promptSnippetMode,
+    promptSourceEditor,
+    promptSyncItems,
+    promptTargetEditors,
 } from "./lib/prompts.js";
+import { readSourceSettings, syncSettings } from "./lib/settings-sync.js";
+import { syncSnippets } from "./lib/snippets-sync.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -136,8 +136,10 @@ async function main() {
     targetIds.includes(e.id),
   );
 
+  let activeItems = [...syncItems];
+
   let desiredExtensions = [];
-  if (syncItems.includes("extensions")) {
+  if (activeItems.includes("extensions")) {
     const exportSpinner = ora({
       text: `Exporting extensions from ${sourceEditor.name}...`,
       color: "cyan",
@@ -153,36 +155,45 @@ async function main() {
   }
 
   let sourceSettings = {};
-  if (syncItems.includes("settings")) {
+  if (activeItems.includes("settings")) {
     try {
       sourceSettings = readSourceSettings(getSettingsPath(sourceEditor));
     } catch (err) {
-      console.error(`  ${err.message}\n`);
-      process.exit(1);
+      console.warn(chalk.yellow(`  settings.json skipped: ${err.message}`));
+      activeItems = activeItems.filter((item) => item !== "settings");
     }
   }
 
   let sourceSnippetsDir = "";
-  if (syncItems.includes("snippets")) {
+  if (activeItems.includes("snippets")) {
     sourceSnippetsDir = getSnippetsPath(sourceEditor);
     if (!existsSync(sourceSnippetsDir)) {
-      console.error(
-        `  Source snippets folder not found: ${sourceSnippetsDir}\n`,
+      console.warn(
+        chalk.yellow(
+          `  snippets skipped: source folder not found: ${sourceSnippetsDir}`,
+        ),
       );
-      process.exit(1);
+      activeItems = activeItems.filter((item) => item !== "snippets");
     }
   }
 
   let sourceKeybindings = [];
-  if (syncItems.includes("keybindings")) {
+  if (activeItems.includes("keybindings")) {
     try {
       sourceKeybindings = readSourceKeybindings(
         getKeybindingsPath(sourceEditor),
       );
     } catch (err) {
-      console.error(`  ${err.message}\n`);
-      process.exit(1);
+      console.warn(chalk.yellow(`  keybindings.json skipped: ${err.message}`));
+      activeItems = activeItems.filter((item) => item !== "keybindings");
     }
+  }
+
+  if (activeItems.length === 0) {
+    console.error(
+      chalk.red("\n  All selected sync items were skipped due to errors.\n"),
+    );
+    process.exit(1);
   }
 
   console.log("");
@@ -191,7 +202,7 @@ async function main() {
     try {
       console.log(chalk.bold(editor.name) + ":");
 
-      if (syncItems.includes("settings")) {
+      if (activeItems.includes("settings")) {
         const spinner = ora({
           text: "Syncing settings.json...",
           color: "cyan",
@@ -207,7 +218,7 @@ async function main() {
         }
       }
 
-      if (syncItems.includes("snippets")) {
+      if (activeItems.includes("snippets")) {
         const spinner = ora({
           text: `Syncing snippets (${snippetMode} mode)...`,
           color: "cyan",
@@ -229,7 +240,7 @@ async function main() {
         }
       }
 
-      if (syncItems.includes("keybindings")) {
+      if (activeItems.includes("keybindings")) {
         const spinner = ora({
           text: "Syncing keybindings.json...",
           color: "cyan",
@@ -247,7 +258,7 @@ async function main() {
         }
       }
 
-      if (syncItems.includes("extensions")) {
+      if (activeItems.includes("extensions")) {
         const spinner = ora({
           text: "Installing extensions...",
           color: "cyan",
